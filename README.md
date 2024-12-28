@@ -1,39 +1,63 @@
 # MPC-Net
 
-This package contains supplementary code and implementation details for the [publication](https://doi.org/10.1109/LRA.2020.2974653)
-> J. Carius, F. Farshidian and M. Hutter, "MPC-Net: A First Principles Guided Policy Search," in IEEE Robotics and Automation Letters, vol. 5, no. 2, pp. 2897-2904, April 2020.
+**MPC-Net** is an open-source repository for collecting expert data from an MPC (Model Predictive Control) solver and training a Mixture-of-Experts neural network to mimic the MPC policy.
 
-A preprint is available on [arxiv](https://arxiv.org/pdf/1909.05197.pdf).
+## Features
 
-While licensing restrictions do not allow us to release the ANYmal model,
-we are providing our training script with an alternative ball-balancing robot.
+- Single-step data collection using arc-length coverage
+- Modular path generators (line, circle, figure-8, sinusoidal, spiral)
+- Unicycle dynamics model
+- Customizable CasADi-based MPC solver
+- Keras/TensorFlow Mixture-of-Experts architecture
+- Visualization scripts
 
-## Dependencies
- * [OCS2 Toolbox](https://bitbucket.org/leggedrobotics/ocs2/)
- * [Pybind11](https://github.com/pybind/pybind11)
- * [Pytorch](https://pytorch.org/)
- * [TensorboardX](https://pypi.org/project/tensorboardX/)
- * [Matplotlib](https://matplotlib.org/)
+## Installation
 
-## Setup Instructions
-* Build and install Pybind11 according to the instructions in their documentation.
-Make sure CMake can locate the Pybind11 installation, for example by adding the install path to your `CMAKE_PREFIX_PATH`.
+1. Clone this repo:
 
-* Clone [OCS2](https://bitbucket.org/leggedrobotics/ocs2/) into the source folder of a catkin workspace.
-Then build the python bindings for the optimal control solver with<br>
-`catkin build ocs2_ballbot_example --cmake-args -DUSE_PYBIND_PYTHON_3=ON`
-* Install required python packages<br>
-`pip3 install torch tensorboardX matplotlib`<br>
-Note that we use python3 as it is required for pytorch.
+   ```bash
+   git clone https://github.com/<your-username>/mpc-net.git
+   cd mpc-net
 
-## Running the Policy Training
-Make sure your catkin workspace is sourced in the current terminal.
-The policy training can then be started with the command<br>
-`python3 ballbot_learner.py`
+2. Create a virtual environment:
 
-To monitor progress, execute tensorboard<br>
-`tensorboard --logdir runs`
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate
 
-During training, the policy will be saved to disk in regular intervals.
-The performance of the policy on the internal model can be visualized by running the script<br>
-`python3 ballbot_evaluation.py`
+3. pip install -r requirements.txt
+
+## Usage
+
+1. Collect data & train:
+
+    ```bash
+    python3 scripts/train.py
+
+This will run the MPC data collection on multiple "gentle" paths, store the expert dataset (X_data, Y_data), and train the MoE model. The final model is saved to moe_model.h5
+
+2. Evaluate
+
+    ```bash
+    python3 scripts/evaluate.py
+
+Loads moe_model.h5 and runs the learned policy on a gentle figure-8 path, producing CTE and yaw error plots and final trajectory.
+
+## Folder Structure
+
+    ```bash
+    mpc_net/
+    dynamics/
+    paths/
+    mpc/
+    models/
+    training/
+    evaluation/
+    scripts/
+
+See individual subfolders for more details.
+
+## Contributing
+
+Feel free to open issues or PRs if you find bugs or have improvements!
+Happy tracking!

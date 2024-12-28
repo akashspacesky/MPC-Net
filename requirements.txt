@@ -1,0 +1,5 @@
+numpy
+matplotlib
+scipy
+casadi
+tensorflow>=2.9
