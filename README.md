@@ -16,7 +16,7 @@
 1. Clone this repo:
 
    ```bash
-   git clone https://github.com/<your-username>/mpc-net.git
+   git clone https://github.com/akashspacesky/MPC-Net.git
    cd mpc-net
 
 2. Create a virtual environment:
@@ -25,34 +25,37 @@
     python3 -m venv venv
     source venv/bin/activate
 
-3. pip install -r requirements.txt
+3. pip3 install -r requirements.txt
 
 ## Usage
 
 1. Collect data & train:
 
     ```bash
-    python3 scripts/train.py
+    python3 -m scripts.train
 
-This will run the MPC data collection on multiple "gentle" paths, store the expert dataset (X_data, Y_data), and train the MoE model. The final model is saved to moe_model.h5
+This will run the MPC data collection on multiple "" paths, store the expert dataset (X_data, Y_data), and train the MoE model. The final model is saved to moe_model.h5
 
 2. Evaluate
 
     ```bash
-    python3 scripts/evaluate.py
+    python3 -m scripts.evaluate
 
-Loads moe_model.h5 and runs the learned policy on a gentle figure-8 path, producing CTE and yaw error plots and final trajectory.
+Loads moe_model.h5 and runs the learned policy on a  figure-8 path, producing CTE and yaw error plots and final trajectory.
+
+## Results 
+
+
 
 ## Folder Structure
 
-    ```bash
     mpc_net/
-    dynamics/
-    paths/
-    mpc/
-    models/
-    training/
-    evaluation/
+        dynamics/
+        paths/
+        mpc/
+        models/
+        training/
+        evaluation/
     scripts/
 
 See individual subfolders for more details.
