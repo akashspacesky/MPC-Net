@@ -25,7 +25,7 @@ def collect_mpc_data(path_generators,
                      dynamics,
                      coverage_threshold=0.95,
                      replay_buffer_size=30000,
-                     decimation=5):
+                     decimation=2):
     """
     Single-step approach w/ arc coverage:
       - coverage_threshold=0.95
