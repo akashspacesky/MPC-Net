@@ -1,11 +1,12 @@
 """
 mpc_net/training/data_collection.py
 
-Collect single-step MPC data with arc-length coverage logic.
-We add:
-  - coverage_threshold=0.99 by default
-  - max_steps = 3*T_path so we can finish the second loop
-  - decimation parameter to skip storing data every N steps
+Collect single-step MPC data with arc-length coverage.
+Now includes:
+  - coverage_threshold=0.95
+  - max_steps=2*T_path
+  - decimation=5 by default
+  - 'stale coverage' detection to avoid infinite loops
 """
 
 import numpy as np
@@ -19,14 +20,18 @@ def compute_arc_length(xy):
     s = np.concatenate(([0.0], np.cumsum(dist)))
     return s
 
-def collect_mpc_data(path_generators, constraints, dynamics,
-                     coverage_threshold=0.99,
-                     replay_buffer_size=300000,
+def collect_mpc_data(path_generators,
+                     constraints,
+                     dynamics,
+                     coverage_threshold=0.95,
+                     replay_buffer_size=30000,
                      decimation=5):
     """
-    Single-step approach with arc-length coverage:
-      - coverage_threshold default = 0.99 (try to cover nearly all path)
-      - decimation=5 => only store data once every 5 steps (speed up)
+    Single-step approach w/ arc coverage:
+      - coverage_threshold=0.95
+      - decimation=5 => skip storing some data
+      - max_steps=2*T_path => ensures we don't loop forever
+      - stale coverage detection => break if coverage not improving for 100 steps
     """
     X_data = []
     Y_data = []
@@ -34,29 +39,32 @@ def collect_mpc_data(path_generators, constraints, dynamics,
 
     for name, path_func in path_generators:
         print(f"\n[MPC Data] Running path: {name}")
-        path = path_func()  # shape (2, T)
+        path = path_func()  # shape(2,T)
         yaw_ref = np.arctan2(np.gradient(path[1]), np.gradient(path[0]))
-        ref_path = np.vstack((path, yaw_ref))  # shape (3, T)
+        ref_path = np.vstack((path, yaw_ref))  # shape(3, T)
         T_path = ref_path.shape[1]
 
-        # arc coverage arrays
+        # arc-based coverage
         arc_array = compute_arc_length(path)
         total_arc = arc_array[-1]
 
         collect_state = np.array([path[0,0], path[1,0], yaw_ref[0]])
         tree = KDTree(path.T)
-        local_traj = [collect_state.copy()]
 
+        local_traj = [collect_state.copy()]
         best_arc = 0.0
         coverage = 0.0
-        iteration_count = 0
-        max_steps = 3 * T_path  # more steps => better chance to finish loops
 
-        # We'll only store data every 'decimation' steps
+        iteration_count = 0
+        max_steps = 2 * T_path  # 2x path length => limit
         step_counter = 0
 
-        while coverage < coverage_threshold and iteration_count < max_steps \
-              and len(X_data) < replay_buffer_size:
+        stale_count = 0
+        last_coverage = 0.0
+
+        while (coverage < coverage_threshold
+               and iteration_count < max_steps
+               and len(X_data) < replay_buffer_size):
 
             dist, idx = tree.query(collect_state[:2])
             curr_arc = arc_array[idx]
@@ -64,24 +72,38 @@ def collect_mpc_data(path_generators, constraints, dynamics,
                 best_arc = curr_arc
             coverage = best_arc / total_arc
 
+            # stale coverage check
+            coverage_diff = abs(coverage - last_coverage)
+            if coverage_diff < 1e-7:
+                stale_count += 1
+            else:
+                stale_count = 0
+            last_coverage = coverage
+
+            # break if coverage is stuck not improving
+            if stale_count > 100:
+                print("Coverage not improving => break early.")
+                break
+
             if dist > 2.0:
                 print(f"  -> Off track => stop. dist={dist:.2f}")
                 break
 
-            # local horizon
+            # local horizon slice
+            horizon_steps = 50
             start_idx = max(0, idx)
-            end_idx   = min(T_path, start_idx + 50)  # default horizon steps = 50
+            end_idx = min(T_path, start_idx + horizon_steps)
             ref_horizon = ref_path[:, start_idx:end_idx]
 
+            # Solve MPC
             u_sol, _ = solve_mpc(collect_state, ref_horizon, constraints)
-            # check if solver returned empty
             if u_sol.ndim < 2 or u_sol.size == 0:
-                print(f"  -> MPC solution empty for {name}, stopping.")
+                print(f"  -> MPC solution empty => stop.")
                 break
 
             ctrl = u_sol[:, 0]
 
-            # decimate stored data => only store every Nth step
+            # decimate => store every Nth step
             if step_counter % decimation == 0:
                 ref_x  = ref_horizon[0,0]
                 ref_y  = ref_horizon[1,0]
@@ -92,7 +114,7 @@ def collect_mpc_data(path_generators, constraints, dynamics,
                 ])
                 Y_data.append([ctrl[0], ctrl[1]])
 
-            # Step the unicycle
+            # step unicycle
             collect_state = dynamics.step(collect_state, ctrl)
             local_traj.append(collect_state.copy())
 
@@ -100,7 +122,7 @@ def collect_mpc_data(path_generators, constraints, dynamics,
             step_counter    += 1
 
         mpc_trajectories[name] = np.array(local_traj)
-        print(f"  -> {name}: coverage={coverage:.2f}, steps={iteration_count}, data so far={len(X_data)}.")
+        print(f"  -> {name}: coverage={coverage:.3f}, steps={iteration_count}, data so far={len(X_data)}.")
 
         if len(X_data) >= replay_buffer_size:
             print("Replay buffer limit => stop collecting.")
